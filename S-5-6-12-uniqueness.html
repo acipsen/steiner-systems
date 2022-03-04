@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>Uniqueness of the Steiner system S(5,6,12)</title>
+<script>
+
+// 0  1  2  3
+// 4  5  6  7
+// 8  9 10 11
+
+function mMOGtoString(m)
+{
+  let s = "";
+
+  for(let i = 0; i < 12; i += 4)
+  {
+    s += "    [" + m[i] + m[i+1];
+    s += m[i+2] + m[i+3] + "]\n";
+  }
+  return s;
+}
+
+function idxOfEl(el, arr)
+{
+  for(var i = 0; i < 12; i++)
+  {
+    if(arr[i] == el)
+      return i;
+  }
+  throw "idxOfEl: El " + el + " not found in arr " + mMOGtoString(arr);
+}
+  
+function mMOGfromElList(els, arr)
+{
+  var ss = "            ".split("");
+  for(var i = 0; i < els.length; i++)
+  {
+    var j = idxOfEl(els[i], arr);
+    if(ss[j] != " ")
+      throw "mMOGfromElList: Repeated element " + els.toString();
+    ss[j] = "*";
+  }
+  return ss;
+}
+
+function elListFrommMOG(ss, arr)
+{
+  var els = [];
+  for(var i = 0; i < 12; i++)
+  {
+    switch(ss[i])
+    {
+    case " ":
+      break;
+    case "*":
+      els.push(arr[i])
+      break;
+    default:
+      throw "elListFrommMOG: Unexpected char in: " + ss;
+    }
+  }
+  els.sort();
+  return els;
+}
+
+//Is m1 subset of m2?
+function mMOGisSubset(m1, m2)
+{
+  for(var i = 0; i < 12; i++)
+  {
+    if(m1[i] == "*" && m2[i] == " ")
+      return false;
+  }
+  return true;
+}
+
+function mMOGoverlap(m1, m2)
+{
+  var c = 0;
+  for(var i = 0; i < 12; i++)
+  {
+    if(m1[i] == "*" && m2[i] == "*")
+      c++;
+  }
+  return c;
+}
+
+function mMOGdisjoint(m1, m2)
+{
+  return mMOGoverlap(m1, m2) == 0;
+}
+
+
+// m1 \setminus m2
+// we demand that m2 is a subset of m1
+function mMOGdifference(m1, m2)
+{
+  var md = []
+  for(var i = 0; i < 12; i++)
+  {
+    switch(m1[i] + m2[i])
+    {
+    case "  ":
+    case "**":
+      md[i] = " ";
+      break;
+    case "* ":
+      md[i] = "*";
+      break;
+    case " *":
+      throw "mMOGdifference: m2 not subset of m1! ";
+    }
+  }
+  return md;
+}
+
+function mMOGcolDist(m)
+{
+  var cs = [];
+  for(var col = 0; col < 4; col++)
+  {
+    var c = 0;
+    for(var i = col; i < 12; i += 4)
+    {
+      if(m[i] == "*")
+        c++;
+    }
+    cs.push(c);
+  }
+  cs.sort();
+  return cs[3].toString() + cs[2].toString() + cs[1].toString() + cs[0].toString();
+}
+
+function elListColDist(els, arr)
+{
+  return mMOGcolDist(mMOGfromElList(els, arr));
+}
+
+function isEl(c)
+{
+  return "a" <= c && c <= "l";
+}
+
+//Check that els is a *ordered* list of *distinct* elements
+function isElList(els)
+{
+  for(var i = 0; i + 1 < els.length; i++)
+  {
+    if(!isEl(els[i]) || !isEl(els[i+1]))
+      return false;
+    if(els[i] >= els[i+1])
+      return false;
+  }
+  return true;
+}
+
+function elListFromString(s, preserveOrder)
+{
+  var els = [];
+  for(var i = 0; i < s.length; i++)
+  {
+    var c = s.charAt(i);
+    if(c == " " || c == ",")
+      continue;
+    //if(!isEl(c))
+    //  throw "elListFromString: Unexpected character in " + s;
+    els.push(c);
+  }
+  var elsOrigOrder = els.slice();
+  els.sort();
+  if(!isElList(els))
+    throw "elListFromString: Duplicate element: " + s;
+  return preserveOrder ? elsOrigOrder : els;
+}
+
+function elListToString(els, arr)
+{
+  if(arr)
+  {
+    var m = "            ".split("");
+    for(var i = 0; i < els.length; i++)
+    {
+      var el = els[i];
+      m[idxOfEl(el, arr)] = el;
+    }
+    return mMOGtoString(m);
+  }
+  else
+  {
+    var s = "";
+    for(var i = 0; i < els.length; i++)
+      s += els[i];
+  }
+  return s;
+}
+
+function elListComplement(els)
+{
+  var seen = [];
+  for(var i = 0; i < els.length; i++)
+  {
+    seen[els[i]] = true;
+  }
+  var cels = [];
+  for(var j = "a".charCodeAt(); j <= "l".charCodeAt(); j++)
+  {
+    c = String.fromCharCode(j);
+    if(!seen[c])
+      cels.push(c);
+  }
+  return cels;
+}
+
+function elListDisjointUnion(els1, els2)
+{
+  var els3 = els1.concat(els2);
+  els3.sort();
+  if(!isElList(els3))
+    throw "elListDisjointUnion: fail on " + els1.toString() + " " + els2.toString();
+  return els3;
+}
+
+function makeInitialArr(els)
+{
+  var arr = [];
+  //var seen = [];
+  //if(!isElList(els)) // Fails because els are not sorted
+  //  throw "makeInitialArr: Expected list of elements: " + els.toString();
+  if(els.length != 6)
+    throw "makeInitialArr: Expected six elements: " + els.toString();
+  for(var i = 0; i <= 4; i++)
+  {
+    arr[i] = els[i];
+    //seen[els[i]] = true;
+  }
+  arr[8] = els[5];
+  var cels = elListComplement(els);
+  for(var i = 0; i < 12; i++)
+  {
+    if(arr[i] == undefined)
+      arr[i] = cels.pop();
+  }
+
+  return arr;
+}
+
+function transposeArr(i1, i2, arr)
+{
+  var temp = arr[i1];
+  arr[i1] = arr[i2];
+  arr[i2] = temp;
+}
+
+function randArr()
+{
+  var m = [];
+  for(var i = "a".charCodeAt(); i <= "l".charCodeAt(); i++)
+  {
+    var j;
+    do
+    {
+      j = Math.floor(12*Math.random());
+    } while (m[j]);
+    m[j] = String.fromCharCode(i);
+  }
+  return m;
+}
+
+function logRandArr()
+{
+  console.log(mMOGtoString(randArr()));
+}
+
+function moveElTo(el, idx, arr)
+{
+  transposeArr(idx, idxOfEl(el, theArr), theArr);
+}
+
+var userHexads = {};
+var theArr;
+var promptContaining;
+var promptDisjoint;
+//When completing a quartet, the known triples are
+//knownTriple (which is a subset of promptContaining)
+//and promptDisjoint
+var knownTriple;
+var restoringAutCount;
+var inputHistory = [];
+
+function isPossibleAddHexad(els)
+{
+  var ss1 = mMOGfromElList(els, theArr);
+  for(var h in userHexads)
+  {
+    var ss2 = mMOGfromElList(h, theArr);
+    var c = mMOGoverlap(ss1, ss2);
+    if(c >= 5)
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+function addUserHexad(els)
+{
+  if(!isElList(els))
+    throw "addUserHexad: Expected list of elements: " + els.toString();
+  if(els.length != 6)
+    throw "addUserHexad: Expected six elements: " + els.toString();
+  var m1 = mMOGfromElList(els, theArr);
+  for(var h in userHexads)
+  {
+    var m2 = mMOGfromElList(h, theArr);
+    var c = mMOGoverlap(m1, m2);
+    if(c >= 5)
+    {
+      if(mMOGcolDist(m2) == "2220")
+      {
+        h = elListComplement(h);
+        c = 6 - c;
+      }
+      throw "Overlap " + c.toString() + " between\n\n" + elListToString(els, theArr)
+            + "and\n\n" + elListToString(h, theArr);
+    }
+  }
+  userHexads[elListToString(els)] = true;
+  userHexads[elListToString(elListComplement(els))] = true;
+}
+
+function tryCompleteS239(t)
+{
+  var ss = mMOGfromElList(t, theArr);
+  for(var i = 0; i < 10; i++)
+  {
+    if(ss[i] == "*")
+      continue;
+    ss[i] = "*";
+    for(var j = i + 1; j < 11; j++)
+    {
+      if(ss[j] == "*")
+        continue;
+      ss[j] = "*";
+      var ks = [];
+      var alreadyHexad = false;
+      for(var k = 0; k < 12; k++)
+      {
+        if(ss[k] == "*")
+          continue;
+        ss[k] = "*";
+        var els = elListFrommMOG(ss, theArr);
+        if(userHexads[elListToString(els)])
+          alreadyHexad = true;
+        else if(isPossibleAddHexad(els))
+          ks.push(k);
+        ss[k] = " ";
+      }
+      if(ks.length == 1 && (!alreadyHexad))
+      {
+        ss[ks[0]] = "*";
+        addUserHexad(elListFrommMOG(ss, theArr));
+        ss[ks[0]] = " ";
+      }
+      ss[j] = " ";
+    }
+    ss[i] = " ";
+  }
+}
+
+var ffhOnly3111 = true;
+
+function findForcedHexads(addHexads)
+{
+  var ahs = [];
+  var ss = "            ".split("");
+  for(var i1 = 0; i1 < 8; i1++){ss[i1] = "*";
+  for(var i2 = i1 + 1; i2 < 9; i2++){ss[i2] = "*";
+  for(var i3 = i2 + 1; i3 < 10; i3++){ss[i3] = "*";
+  for(var i4 = i3 + 1; i4 < 11; i4++){ss[i4] = "*";
+  for(var i5 = i4 + 1; i5 < 12; i5++){ss[i5] = "*";
+    var ks = [];
+    var hasExtension = false;
+    for(var i6 = 0; i6 < 12; i6++)
+    {
+      if(ss[i6] == "*")
+        continue;
+      ss[i6] = "*";
+      var els = elListFrommMOG(ss, theArr);
+      if(userHexads[elListToString(els)])
+        hasExtension = true;
+      else if(isPossibleAddHexad(els))
+        ks.push(i6);
+      ss[i6] = " ";
+    }
+    if(ks.length == 1 && !hasExtension)
+    {
+      ss[ks[0]] = "*";
+      var els = elListFrommMOG(ss, theArr);
+      var colDist = mMOGcolDist(ss);
+      ss[ks[0]] = " ";
+      if(!ffhOnly3111 || colDist == "3111")
+      {
+        console.log("Extension of");
+        console.log(elListToString(elListFrommMOG(ss, theArr), theArr));
+        console.log("forced to be");
+        console.log(elListToString(els, theArr));
+        ahs.push(els);
+      }
+    }
+    else if(ks.length == 0 && !hasExtension)
+    {
+      console.log("No possible extension of");
+      console.log(elListToString(elListFrommMOG(ss, theArr), theArr));
+    }
+  ss[i5] = " ";}
+  ss[i4] = " ";}
+  ss[i3] = " ";}
+  ss[i2] = " ";}
+  ss[i1] = " ";}
+  if(addHexads)
+  {
+    for(var i = 0; i < ahs.length; i++)
+    {
+      if(!userHexads[elListToString(ahs[i])])
+        addUserHexad(ahs[i]);
+    }
+  }
+}
+
+var stdQuartets = [
+  ("0123" +
+   "0123" +
+   "0123").split(""),
+  ("0111" +
+   "0222" +
+   "0333").split(""),
+  ("0123" +
+   "0312" +
+   "0231").split(""),
+  ("0123" +
+   "0231" +
+   "0312").split(""),
+  ("1011" +
+   "2023" +
+   "3032").split(""),
+  ("1032" +
+   "2011" +
+   "3023").split(""),
+  ("1023" +
+   "2032" +
+   "3011").split(""),
+  ("1101" +
+   "2302" +
+   "3203").split(""),
+  ("1203" +
+   "2101" +
+   "3302").split(""),
+  ("1203" +
+   "3302" +
+   "2101").split(""),
+  ("1110" +
+   "2230" +
+   "3320").split(""),
+  ("1230" +
+   "2320" +
+   "3110").split(""),
+  ("1230" +
+   "3110" +
+   "2320").split("")];
+   
+function hexadSubsetsFromQuartet(q)
+{
+  var sss = [];
+  for(var i = 0; i < 3; i++)
+  {
+    for(var j = i + 1; j < 4; j++)
+    {
+      var ss = [];
+      for(var k = 0; k < 12; k++)
+      {
+        if(q[k] == i || q[k] == j)
+          ss[k] = "*";
+        else
+          ss[k] = " ";
+      }
+      sss.push(ss);
+    }
+  }
+  return sss;
+}
+
+var htsSuppress2220 = true;
+
+function hexadsToString(hs, arr)
+{
+  //var s = Object.keys(hs).length.toString() + "\n\n";
+  var s = "";
+  var seen = {};
+  for(var i = 0; i < stdQuartets.length; i++)
+  {
+    var sss = hexadSubsetsFromQuartet(stdQuartets[i]);
+    var qhs = [];
+    var qInhs = true;
+    for(var j = 0; j < sss.length; j++)
+    {
+      qhs[j] = elListToString(elListFrommMOG(sss[j], arr));
+      if(!hs[qhs[j]])
+        qInhs = false;
+    }
+    if(!qInhs)
+      continue;
+    s += mMOGtoString(stdQuartets[i]) + "\n";
+    for(var j = 0; j < qhs.length; j++)
+      seen[qhs[j]] = true;
+  }
+  for(var h in hs)
+  {
+    //s += h + "\n";
+    if(seen[h])
+      continue;
+    if(htsSuppress2220 && elListColDist(elListFromString(h), arr) == "2220")
+      continue;
+    var m = "            ".split("");
+    for(var i = 0; i < 6; i++)
+    {
+      var el = h.charAt(i);
+      m[idxOfEl(el, arr)] = el;
+    }
+    s += mMOGtoString(m) + "\n";
+  }
+  return s;
+}
+
+function makePrompt()
+{
+  var s;
+  if(promptDisjoint.length != 0)
+  {
+    //s = "Hexad containing [" + elListToString(promptContaining);
+    //s += "] but disjoint from [" + elListToString(promptDisjoint) + "]";
+    s = "Hexad containing\n\n" + elListToString(promptContaining, theArr);
+    s += "\nbut disjoint from\n\n" + elListToString(promptDisjoint, theArr);
+
+  }
+  else if(promptContaining.length != 0)
+  {
+    s = "Comlete\n\n" + elListToString(promptContaining, theArr);
+  }
+  else
+  {
+    //FIXME: what to put here
+    s = "";
+  }
+  return s;
+}
+
+var mMOGcol1 =
+  ("*   " +
+   "*   " +
+   "*   ").split("");
+   
+var mMOGcol2 =
+  (" *  " +
+   " *  " +
+   " *  ").split("");
+   
+var mMOGcol3 =
+  ("  * " +
+   "  * " +
+   "  * ").split("");
+   
+var mMOGcol4 =
+  ("   *" +
+   "   *" +
+   "   *").split("");
+   
+   
+function updateHexadList()
+{
+  var hl = document.getElementById("hexadListPre");
+  hl.innerHTML = hexadsToString(userHexads, theArr);
+}
+
+function processInput()
+{
+  var ui = document.getElementById("userInput");
+  var ar = document.getElementById("arrPre");
+  var pl = document.getElementById("prompt");
+  var ep = document.getElementById("errorPre");
+  var mp = document.getElementById("messagesPre");
+  var s = ui.value;
+  var uhKeys = Object.keys(userHexads);
+  var els;
+  try
+  {
+    els = elListFromString(s);
+  }
+  catch (e)
+  {
+    ep.innerHTML = e.toString();
+    return;
+  }
+  if(els.length != 6)
+  {
+    ep.innerHTML = "Not six elements!";
+    return;
+  }
+  var remaining3;
+  var added2;
+  var added1;
+  var forcedHexad;
+  if(uhKeys.length > 0)
+  {
+    var hss = mMOGfromElList(els, theArr);
+    var pcss = mMOGfromElList(promptContaining, theArr);
+    var pdss = mMOGfromElList(promptDisjoint, theArr);
+    if(!mMOGisSubset(pcss, hss))
+    {
+      ep.innerHTML = "Does not contain [" + elListToString(promptContaining) + "]";
+      return;
+    }
+    if(!mMOGdisjoint(hss, pdss))
+    {
+      ep.innerHTML = "Not disjoint from [" + elListToString(promptDisjoint) + "]";
+      return;
+    }
+    try
+    {
+      addUserHexad(els);
+    }
+    catch(e)
+    {
+      ep.innerHTML = e.toString();
+      return;
+    }
+    if(promptContaining.length == 4 && promptDisjoint.length == 3)
+    {
+      var els2 = elListDisjointUnion(els, promptDisjoint);
+      remaining3 = elListComplement(els2);
+      forcedHexad = elListDisjointUnion(remaining3, knownTriple);
+      try
+      {
+        addUserHexad(forcedHexad);
+      }
+      catch(e)
+      {
+        ep.innerHTML = "Adding forced hexad failed. This is not handled correctly! " +
+                        e.toString();
+        return;
+      }
+      els2 = elListDisjointUnion(promptDisjoint, promptContaining);
+      els2 = elListDisjointUnion(els2, remaining3);
+      added2 = elListComplement(els2);
+    }
+    if(promptContaining.length == 5 && promptDisjoint.length == 0)
+    {
+      var ss1 = mMOGfromElList(els, theArr);
+      var ss2 = mMOGfromElList(promptContaining, theArr);
+      var els2 = elListFrommMOG(mMOGdifference(ss1, ss2), theArr);
+      if(els2.length != 1)
+        throw "processInput: Expected exactly one element added.";
+      added1 = els2[0];
+    }
+  }
+  inputHistory.push(s);
+  mp.innerHTML = "";
+  switch(uhKeys.length) //Number of hexads is increased by above code. This is the *old* number of hexads.
+  {
+  case 0:
+    var elsOrigOrder = elListFromString(s, true);
+    theArr = makeInitialArr(elsOrigOrder);
+    addUserHexad(els);
+    knownTriple = elListFrommMOG(mMOGcol1, theArr);
+    var m = 
+      ("*   " +
+       "**  " +
+       "*   ").split("");
+    promptContaining = elListFrommMOG(m, theArr);
+    m = 
+      (" ***" +
+       "    " +
+       "    ").split("");
+    promptDisjoint = elListFrommMOG(m, theArr);
+    break;
+  case 2:
+    theArr[6] = added2[0]; theArr[7] = added2[1];
+    theArr[9] = remaining3[0]; theArr[10] = remaining3[1]; theArr[11] = remaining3[2];
+    mp.innerHTML = "Hexads\n\n" + elListToString(elListDisjointUnion(knownTriple, promptDisjoint), theArr);
+    mp.innerHTML += "\nand\n\n" + elListToString(els, theArr);
+    mp.innerHTML += "\nforce\n\n" + elListToString(forcedHexad, theArr);
+    var ss = 
+      ("****" +
+       " *  " +
+       "    ").split("");
+    promptContaining = elListFrommMOG(ss, theArr);
+    promptDisjoint = [];
+    break;
+  case 6:
+    moveElTo(added1, 9, theArr);
+    var ss = 
+      ("*   " +
+       "**  " +
+       "**  ").split("");
+    promptContaining = elListFrommMOG(ss, theArr);
+    promptDisjoint = [];
+    break;
+  case 8:
+    switch(idxOfEl(added1, theArr))
+    {
+    case 1:
+      restoringAutCount = 0;
+      break;
+    case 2:
+      restoringAutCount = 1;
+      mp.innerHTML = "The top row has been rearranged.\n"
+                     + "This will be undone at a later stage."
+      transposeArr(1, 2, theArr);
+      transposeArr(2, 3, theArr);
+      break;
+    case 3:
+      restoringAutCount = 2;
+      mp.innerHTML = "The top row has been rearranged.\n"
+                     + "This will be undone at a later stage."
+      transposeArr(1, 3, theArr);
+      transposeArr(2, 3, theArr);
+      break;
+    }
+    var ss = 
+      ("* * " +
+       "*   " +
+       "*   ").split("");
+    promptContaining = elListFrommMOG(ss, theArr);
+    promptDisjoint = elListFrommMOG(mMOGcol2, theArr);
+    break;
+  case 10:
+    for(var i = 0; i < 2; i++)
+    {
+      var idx = idxOfEl(added2[i], theArr);
+      switch(idx)
+      {
+      case 6:
+      case 10:
+        break;
+      case 7:
+        transposeArr(6, 7, theArr);
+        break;
+      case 11:
+        transposeArr(10, 11, theArr);
+        break;
+      default:
+        throw "processInput: Unexpected idx " + idx.toString();
+      }
+    }
+    tryCompleteS239(elListFrommMOG(mMOGcol1, theArr));
+    mp.innerHTML = "Hexads\n\n" + elListToString(elListDisjointUnion(knownTriple, promptDisjoint), theArr);
+    mp.innerHTML += "\nand\n\n" + elListToString(els, theArr);
+    mp.innerHTML += "\nforce\n\n" + elListToString(forcedHexad, theArr);
+    mp.innerHTML += "\nAdditionally, the remaining two quartets\n" +
+                    "containing the first column are forced.";
+    var ss = 
+      (" ** " +
+       "**  " +
+       " *  ").split("");
+    promptContaining = elListFrommMOG(ss, theArr);
+    promptDisjoint = []; 
+    break;
+  case 26:
+    switch(idxOfEl(added1, theArr))
+    {
+    case 7:
+      break;
+    case 11:
+      transposeArr(5, 9, theArr);
+      transposeArr(6, 10, theArr);
+      transposeArr(7, 11, theArr);
+      break;
+    default:
+      throw "processInput: Unexpected idx!";
+    }
+    knownTriple = elListFrommMOG(mMOGcol2, theArr);
+    var m = 
+      (" *  " +
+       "**  " +
+       " *  ").split("");
+    promptContaining = elListFrommMOG(m, theArr);
+    m = 
+      ("* **" +
+       "    " +
+       "    ").split("");
+    promptDisjoint = elListFrommMOG(m, theArr);
+    break;
+  case 28:
+    mp.innerHTML = "Hexads\n\n" + elListToString(elListDisjointUnion(knownTriple, promptDisjoint), theArr);
+    mp.innerHTML += "\nand\n\n" + elListToString(els, theArr);
+    mp.innerHTML += "\nforce\n\n" + elListToString(forcedHexad, theArr) + "\n";
+    var i1 = idxOfEl(added2[0], theArr);
+    var i2 = idxOfEl(added2[1], theArr);
+    if((i1 == 6 && i2 == 11) || (i2 == 6 && i1 == 11))
+    {
+      mp.innerHTML += "Additionally, the remaining two quartets\n" +
+                      "containing the second column are forced.";
+      tryCompleteS239(elListFrommMOG(mMOGcol2, theArr));
+      var m = 
+        ("****" +
+         "  * " +
+         "    ").split("");
+      promptContaining = elListFrommMOG(m, theArr);
+      promptDisjoint = [];
+    }
+    else
+    {
+      var m = 
+        (" *  " +
+         "*  *" +
+         " ** ").split("");
+      promptContaining = elListFrommMOG(m, theArr);
+      promptDisjoint = [];
+      mp.innerHTML += "This collection of hexads cannot be extended\n"
+                   +  "to a Steiner system. For example, it is not\n"
+                   +  "possible to add a hexad containing these five\n"
+                   +  "points (try!).";
+    }
+    break;
+  case 42:
+    var m = 
+      ("  * " +
+       "* **" +
+       " *  ").split("");
+    promptContaining = elListFrommMOG(m, theArr);
+    promptDisjoint = [];
+    break;
+  case 44:
+    var m = 
+      ("  * " +
+       " ** " +
+       "* **").split("");
+    forcedHexad = elListFrommMOG(m, theArr);
+    addUserHexad(forcedHexad);
+    tryCompleteS239(elListFrommMOG(mMOGcol3, theArr));
+    m = 
+      ("****" +
+       "  * " +
+       "  * ").split("");
+    mp.innerHTML = "Hexads\n\n" + elListToString(elListFrommMOG(m, theArr), theArr);
+    mp.innerHTML += "\nand\n\n" + elListToString(els, theArr);
+    mp.innerHTML += "\nforce\n\n" + elListToString(forcedHexad, theArr) + "\n";
+    mp.innerHTML += "Additionally, the remaining two quartets\n" +
+                    "containing the third column are forced.";
+    m =
+      ("****" +
+       "   *" +
+       "    ").split("");
+    promptContaining = elListFrommMOG(m, theArr);
+    promptDisjoint = [];
+    break;
+  case 60:
+    var m = 
+      ("   *" +
+       "** *" +
+       "  * ").split("");
+    promptContaining = elListFrommMOG(m, theArr);
+    promptDisjoint = [];
+    break;
+  case 62:
+    var m = 
+      ("   *" +
+       "  **" +
+       "** *").split("");
+    forcedHexad = elListFrommMOG(m, theArr);
+    addUserHexad(forcedHexad);
+    tryCompleteS239(elListFrommMOG(mMOGcol4, theArr));
+    m = 
+      ("****" +
+       "   *" +
+       "   *").split("");
+    var els2 = elListFrommMOG(m, theArr);
+    mp.innerHTML = "";
+    for(var i = 0; i < restoringAutCount; i++)
+    {
+      mp.innerHTML = "The top row has been restored.\n\n"
+      transposeArr(1, 3, theArr); transposeArr(2, 3, theArr);
+      transposeArr(5, 7, theArr); transposeArr(6, 7, theArr);
+      transposeArr(9, 11, theArr); transposeArr(10, 11, theArr);
+    }
+    mp.innerHTML += "Hexads\n\n" + elListToString(els2, theArr)
+                  + "\nand\n\n" + elListToString(els, theArr)
+                  + "\nforce\n\n" + elListToString(forcedHexad, theArr) + "\n"
+                  + "Additionally, the remaining two quartets\n" 
+                  + "containing the final column are forced.\n\n"
+                  + "We now have all those hexads from the standard\n"
+                  + "mMOG with distribution 3300, 3111 and 2220.\n"
+                  + "One can show that all the 2211 hexads are forced,\n"
+                  + "thus completing the standard mMOG."
+    promptContaining = [];
+    promptDisjoint = [];
+    break;
+  default:
+    if(uhKeys.length < 62)
+      throw "processInput: Unexpected number of hexads: " + uhKeys.length;
+  }
+  ar.innerHTML = mMOGtoString(theArr);
+  updateHexadList();
+  document.getElementById("hexadCountSpan").innerHTML = Object.keys(userHexads).length.toString();
+  pl.innerHTML = makePrompt();
+  ep.innerHTML = "";
+  ui.value = elListToString(promptContaining);
+  ui.focus();
+  findForcedHexads();
+}
+
+function resetState()
+{
+  userHexads = {};
+  theArr = undefined;
+  promptContaining = [];
+  promptDisjoint = [];
+  inputHistory = [];
+  document.getElementById("arrPre").innerHTML = "N/A";
+  document.getElementById("hexadListPre").innerHTML = "";
+  document.getElementById("messagesPre").innerHTML = "(none)";
+  document.getElementById("prompt").innerHTML = "Input any hexad (e.g. 'abcdef')";
+  document.getElementById("userInput").value = "";
+  document.getElementById("errorPre").innerHTML = "";
+  document.getElementById("userInput").focus();
+}
+
+function replayHistory()
+{
+  var ih = inputHistory;
+  resetState();
+  for(var i = 0; i < ih.length; i++)
+  {
+    document.getElementById("userInput").value = ih[i];
+    processInput();
+  }
+}
+
+function doUndo()
+{
+  inputHistory.pop();
+  replayHistory();
+}
+
+function auh(s)
+{
+  try
+  {
+    addUserHexad(elListFromString(s));
+  }
+  catch(e)
+  {
+    console.log(e);
+  }
+}
+
+</script>
+</head>
+<body>
+
+
+
+<div style="float:left">
+  Current arrangement of elements:
+  <pre id="arrPre">
+    Current arrangement goes here
+  </pre>
+
+  
+  Query:
+  <pre id="prompt">Prompt here</pre><br>
+  <input id="userInput" type="text">
+  <button id="inputButton" onclick="processInput()">Add hexad</button>
+  <button id="undoButton" onclick="doUndo()">Undo</button>
+  <pre id="errorPre" style="color:red">Error here</pre>
+</div>
+
+<div style="float:left;margin-left: 30px">
+  Messages:
+  <pre id="messagesPre">Messages here</pre>
+</div>
+
+<div style="float:left;margin-left: 30px">
+  Hexad list:
+  <pre id="hexadListPre">
+    Hexads go here
+  </pre>
+  Number of hexads: <span id="hexadCountSpan">0</span>
+  <br><br>
+
+</div>
+
+
+<script>
+document.getElementById("userInput")
+    .addEventListener("keyup", function(event) 
+    {
+      //event.preventDefault();
+      if (event.keyCode === 13) 
+        document.getElementById("inputButton").click();
+    });
+resetState();
+</script>
+
+</body>
+</html>
